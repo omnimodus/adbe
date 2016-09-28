@@ -1,0 +1,216 @@
+<apex:page showHeader="true" controller="OrgDtoCtrlr"  sidebar="true">
+
+	<head>
+		<apex:includescript value="//code.jquery.com/jquery-1.11.1.min.js" / >
+		<apex:includescript value="//cdn.datatables.net/1.10.4/js/jquery.dataTables.min.js" />
+		<apex:stylesheet value="//cdn.datatables.net/1.10.4/css/jquery.dataTables.css" />
+
+		<script>
+			j$ = jQuery.noConflict();
+			j$(document).ready( function () 
+			{
+				var dtblAcct = j$('[id$="dtblAcct"]').DataTable({
+	    		"lengthMenu": [ [5,10, 25, 50, -1], [5,10, 25, 50, "All"] ],
+				"columns": 
+				[
+					{ 
+						"data": "Name"
+					},
+					{ 
+						"data": "ID",
+						"fnCreatedCell": function (nTd, sData, oData, iRow, iCol) 
+						{
+							if(oData.Record_Id_New_Org__c === 'undefined' || oData.Record_Id_New_Org__c == '')
+							{
+							
+							j$(nTd).html("<a onclick=\"save(\'" + oData.ID +"\',\'"+oData.Name+"\');\" href=\"#\">Add To Org</a>");
+							}
+							else
+							{
+							j$(nTd).html("<a href=\"" + oData.Record_Id_New_Org__c +"\">See In Org</a>");								
+							}
+						}
+					},
+					{ 
+						"data": "Record_Id_New_Org__c"
+					}					
+				]
+				});
+			});
+
+	function getDupe(
+		idAcctOld,
+		strAcctNameOld,
+		sessionId)
+	{
+		var strSoqlEncoded = ("SELECT id,name FROM Account WHERE name = '"+strAcctNameOld + "'").replace(/ /g, "+");
+		//alert('soql: ' + strSoqlEncoded);
+
+		var strQuery = '/services/data/v37.0/query/?q='+strSoqlEncoded;
+		try
+		{
+			j$.ajax(
+			{
+			    type: "GET",
+			    url: strQuery,
+			    headers : 
+			    {
+			        'Authorization' : "OAuth " + sessionId,
+			        'Content-Type' : 'application/json'
+			    },
+			    success: function (responseData, status, xhr) 
+			    {
+			    	var strErr = 'getDupe: status: ' + status + ': ' + responseData.status + responseData.message;
+				    alert(strErr);
+			     	console.log(strErr);
+			       
+			        if(status != 200 || responseData.status != null | responseData.message != null)
+			        {
+			        	throw status + ': ' + responseData.status + ': ' + responseData.message;    
+			        } 
+			    },
+			    error: function (request, status, error) 
+			    { 
+			        console.log('getDupe: status: ' + status + ': ' +error);
+			        alert('getDupe: status: ' + status + ': ' +error);
+			    }
+			}); 
+
+	        j$('#svcstatus').text('getDupe: status : ' + status); 			 
+		}
+        catch(err) 
+        { 
+        	alert('getDupe: exception during a check for pre-existing account by this name: ' + strAcctNameOld + ': ' + err.message);           
+        }    		
+	}
+
+    function save(idAcctOld,strAcctNameOld)
+    {
+        console.log('save: idAcctOld: ' + idAcctOld);
+        console.log('save: strAcctNameOld: ' + strAcctNameOld);
+        alert('save: dAcctOld ' + idAcctOld + '\n'+ 'save: strAcctNameOld ' + strAcctNameOld);
+        var sessionId = '{!$Api.Session_ID}';
+
+        if(isEmpty(idAcctOld) || isEmpty(strAcctNameOld))
+        {
+        	var strErr = 'save: skipped record insert: name or old org id was null.';          
+            console.log(strErr);
+            alert(strErr);
+            throw strErr;
+        }
+
+		try
+		{
+			j$.when(
+				//getDupe(idAcctOld,strAcctNameOld,sessionId),
+				getNewId(idAcctOld,strAcctNameOld,sessionId)	
+			)
+        	.then(
+ 				      		   
+        	);              			  
+ 		}
+        catch(err) 
+        { 
+        	alert('save: exception during new record insert: ' + strAcctNameOld + ': ' + err.message);           
+        }
+    }
+
+/**
+*
+*/
+	function getNewId(
+		idAcctOld,
+		strAcctNameOld,
+		sessionId)
+	{
+ 		var strJson = 
+        { 
+            "Old_Org_Account_ID__c" : idAcctOld,
+            "Name" : strAcctNameOld,
+        };
+
+        j$('#svcstatus').text('Saving: ' + strAcctNameOld + '...');
+       
+       try
+       {
+	        j$.ajax(
+	        {
+	            type: "POST",
+	            url: "/services/data/v37.0/sobjects/Account/",
+	            headers : 
+	            {
+	                'Authorization' : "OAuth " + sessionId,
+	                'Content-Type' : 'application/json'
+	            },
+	            crossDomain : false,
+	            data: JSON.stringify(strJson),
+	            success: function (responseData, status, xhr) 
+	            {           
+	                 console.log('getNewId: status code: ' + status);  
+	            },
+	            error: function (request, status, error) 
+	            { 
+	            	console.log('getNewId: status code: ' + status + ': ' + error); 
+	            }
+	        }); 
+
+			j$('#svcstatus').text('getNewId: New record is saved in this org: ' + strAcctNameOld + '...');
+		}
+        catch(err) 
+        { 
+        	j$('#svcstatus').text('getNewId: exception during save this record to this org: ' + strAcctNameOld + '...');
+        	alert('getNewId: exception during insert of this new record to this org: ' + strAcctNameOld + ': ' + err.message);           
+        }         
+
+    }
+
+    function isEmpty(arg1)
+    {
+        var status = false;
+        
+        if(arg1 === 'undefined' 
+        || arg1 == null
+        || arg1 == '')
+        {
+            status = true;
+        }
+        
+        return status;
+    } 
+		</script>
+	</head>
+	<body>
+	<H2 class="pageDescription">Old Org to New Org Account Transfer</H2>
+	<p> Review the following accounts that reside on the old org. For those that have not yet been transferred (that do not yet have a new Org ID);
+	<br/>
+	Click the "Add To Org", link adjacent to the name to create a copy in this org.
+	</p>
+	<div id="svcstatus"></div>
+	<br/>
+		<table id="dtblAcct" class="display">
+			<thead>
+				<tr>
+					
+					<th>Name</th>
+					<th>New Org Status</th>
+					<th>Record_Id_New_Org__c</th>
+				</tr>
+			</thead>
+			<tbody>
+				<apex:repeat value="{!NextQueryOffset}" var="acct">
+					<tr>
+						<td>{!acct.Name}</td>
+						<td>
+
+						{!acct.ID}
+						</td>
+						<td>
+
+						{!acct.Record_Id_New_Org__c}
+						</td>
+					</tr>
+				</apex:repeat>
+			</tbody>
+		</table>
+	</body>	
+</apex:page>
